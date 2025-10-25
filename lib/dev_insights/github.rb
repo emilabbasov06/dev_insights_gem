@@ -85,6 +85,12 @@ module DevInsights
     def contribution_analysis(repo)
       data = get("#{@@API_ROOT_URL}/repos/#{@username}/#{repo}/commits?author=#{@username}")
       contribution_data = []
+      total_additions = 0
+      total_deletions = 0
+      commits_per_week = Hash.new(0)
+      lines_per_week = Hash.new(0)
+      activity_by_day = Hash.new(0)
+      activity_by_hour = Hash.new(0)
 
       data.each do |commit|
         contribution = {
@@ -99,10 +105,42 @@ module DevInsights
         contribution[:additions] = commit_data["stats"]["additions"]
         contribution[:deletions] = commit_data["stats"]["deletions"]
 
+        total_additions += commit_data["stats"]["additions"].to_i
+        total_deletions += commit_data["stats"]["deletions"].to_i
+
+        d = Date.parse(commit["commit"]["committer"]["date"])
+        day = d.strftime("%A")
+        hour = DateTime.parse(commit["commit"]["committer"]["date"]).strftime("%H")
+        week = "#{d.cwyear}-W#{d.cweek}"
+        commits_per_week[week] += 1
+        activity_by_day[day] += 1
+        activity_by_hour[hour] += 1
+        lines_per_week[week] += (commit_data["stats"]["additions"]).to_i
+
         contribution_data.push(contribution)
       end
 
-      contribution_data
+      analyzed_data = {
+        total_commits: contribution_data.length,
+        total_additions: total_additions,
+        total_deletions: total_deletions,
+        commits_per_week: commits_per_week.sort.to_h,
+        lines_per_week: lines_per_week.sort.to_h,
+        most_active_days: activity_by_day.sort_by { |day, count| -count }.first(3).to_h,
+        most_active_hours: activity_by_hour.sort_by { |hour, count| -count }.first(3).to_h,
+      }
+
+      productivity_trend = commits_per_week.keys.sort.map do |week|
+        {
+          week: week,
+          commits: commits_per_week[week],
+          lines_changed: lines_per_week[week],
+          productivity_score: (lines_per_week[week] || 0) + (commits_per_week[week] || 0) * 10
+        }
+      end
+
+      analyzed_data[:productivity_trend] = productivity_trend
+      analyzed_data
     end
 
     private
