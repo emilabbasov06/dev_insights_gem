@@ -1,4 +1,6 @@
 require "httparty"
+require "date"
+# require "clipboard"
 require_relative "../utils/main"
 require_relative "../utils/colors"
 
@@ -80,6 +82,29 @@ module DevInsights
       }
     end
 
+    def contribution_analysis(repo)
+      data = get("#{@@API_ROOT_URL}/repos/#{@username}/#{repo}/commits?author=#{@username}")
+      contribution_data = []
+
+      data.each do |commit|
+        contribution = {
+          sha: commit["sha"],
+          date: DateTime.parse(commit["commit"]["committer"]["date"]).strftime("%m/%d/%Y %H:%M:%S"),
+          additions: commit["commit"]["additions"] || 0,
+          deletions: commit["commit"]["deletions"] || 0,
+          message: commit["commit"]["message"]
+        }
+
+        commit_data = get("#{@@API_ROOT_URL}/repos/#{@username}/#{repo}/commits/#{commit["sha"]}")
+        contribution[:additions] = commit_data["stats"]["additions"]
+        contribution[:deletions] = commit_data["stats"]["deletions"]
+
+        contribution_data.push(contribution)
+      end
+
+      contribution_data
+    end
+
     private
 
     def get(url)
@@ -91,6 +116,7 @@ module DevInsights
         return nil
       end
 
+      # Clipboard.copy(response)
       response.parsed_response
     end
 
